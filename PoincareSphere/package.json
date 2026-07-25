@@ -1,0 +1,9 @@
+{
+  "name": "poincare-sphere",
+  "version": "1.0.0",
+  "description": "ストークスパラメータと位相差板からポアンカレ球上の偏光状態を3D表示するWebアプリ",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT"
+}

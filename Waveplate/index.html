@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>波長板・楕円偏光 3D シミュレーション</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
+    background: #14171c;
+    color: #e6e9ef;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ---- 入力パネル ---- */
+  #panel {
+    width: 300px;
+    flex: none;
+    padding: 16px;
+    background: #1c2027;
+    border-right: 1px solid #2c313a;
+    overflow-y: auto;
+  }
+  #panel h1 {
+    font-size: 16px;
+    margin-bottom: 4px;
+    color: #8ecbff;
+  }
+  #panel .sub { font-size: 11px; color: #6d7684; margin-bottom: 14px; line-height: 1.5; }
+
+  fieldset {
+    border: 1px solid #2c313a;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+  }
+  legend { font-size: 12px; color: #9aa4b2; padding: 0 6px; }
+
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 10px 0;
+    gap: 8px;
+  }
+  .row label { font-size: 12px; flex: none; }
+  .row .val { font-size: 12px; color: #8ecbff; width: 64px; text-align: right; flex: none; }
+  input[type="range"] { flex: 1; min-width: 0; accent-color: #8ecbff; }
+
+  /* ---- プリセットボタン ---- */
+  .btns { display: flex; gap: 6px; margin: 8px 0 4px; }
+  .btns button {
+    flex: 1;
+    padding: 6px 4px;
+    border: 1px solid #3a4150;
+    border-radius: 4px;
+    background: none;
+    color: #cdd3dc;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .btns button:hover { border-color: #8ecbff; }
+  .btns button.active { border-color: #8ecbff; background: #24303f; color: #8ecbff; }
+
+  #playBtn {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #3a4150;
+    border-radius: 4px;
+    background: none;
+    color: #8ecbff;
+    font-size: 13px;
+    cursor: pointer;
+    margin-bottom: 6px;
+  }
+  #playBtn:hover { border-color: #8ecbff; }
+
+  #status {
+    font-size: 12px;
+    line-height: 1.7;
+    background: #14171c;
+    border: 1px solid #2c313a;
+    border-radius: 6px;
+    padding: 10px 12px;
+    white-space: pre-line;
+  }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: baseline; }
+
+  #hint { font-size: 11px; color: #6d7684; margin-top: 12px; line-height: 1.6; }
+
+  /* ---- ビュー領域 ---- */
+  #view {
+    flex: 1;
+    position: relative;
+    min-width: 0;
+  }
+  #view canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  #caption {
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    font-size: 11px;
+    color: #9aa4b2;
+    background: rgba(20, 23, 28, 0.7);
+    padding: 3px 7px;
+    border-radius: 3px;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <div id="panel">
+    <h1>波長板・楕円偏光 3D</h1>
+    <div class="sub">直線偏光 → 波長板で進相/遅相軸に分解 → 位相差 δ → 楕円偏光</div>
+
+    <fieldset>
+      <legend>偏光板（透過軸の角度 φ）</legend>
+      <div class="row">
+        <label for="phi">角度 φ</label>
+        <input id="phi" type="range" min="0" max="180" step="1" value="45">
+        <span class="val" id="phiVal">45°</span>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>波長板（位相差 δ）</legend>
+      <div class="btns" id="deltaBtns">
+        <button data-delta="90">λ/4 板</button>
+        <button data-delta="180">λ/2 板</button>
+        <button data-delta="360">λ 板</button>
+      </div>
+      <div class="row">
+        <label for="delta">δ</label>
+        <input id="delta" type="range" min="0" max="360" step="1" value="90">
+        <span class="val" id="deltaVal">90°</span>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>アニメーション</legend>
+      <button id="playBtn">⏸ 一時停止</button>
+      <div class="row">
+        <label for="speed">速度</label>
+        <input id="speed" type="range" min="0" max="3" step="0.05" value="1">
+        <span class="val" id="speedVal">1.0×</span>
+      </div>
+      <div class="row">
+        <label for="lambda">波長</label>
+        <input id="lambda" type="range" min="380" max="750" step="1" value="530">
+        <span class="val" id="lambdaVal">530nm</span>
+      </div>
+    </fieldset>
+
+    <div id="status"></div>
+
+    <div id="hint">
+      3Dビュー: ドラッグで回転 / ホイールでズーム<br>
+      偏光板を回すと入射偏光の向きが変わり、<br>
+      板を出た光の楕円形状が変化します。
+    </div>
+  </div>
+
+  <div id="view">
+    <canvas></canvas>
+    <span id="caption">3Dビュー（ドラッグで回転・ホイールでズーム）</span>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

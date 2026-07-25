@@ -1,0 +1,9 @@
+{
+  "name": "waveplate-3d",
+  "version": "1.0.0",
+  "description": "直線偏光が波長板（位相差板）を通り楕円偏光になる様子を実空間で3D表示するWebアプリ",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT"
+}
