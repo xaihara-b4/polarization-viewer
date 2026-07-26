@@ -26,7 +26,8 @@ const AXIS_COLOR = 0x556072;
 // 状態（UI から更新）
 const stateP = {
   phi: THREE.MathUtils.degToRad(45), // 透過軸角度（+Y からの回転）
-  delta: THREE.MathUtils.degToRad(90), // 位相差
+  retard: 133,       // 波長板の光路差（リタデーション）[nm]。板の厚みで決まる固有値
+  delta: 0,          // 位相差 [rad] = 2π·retard/λ（retard と λ から rebuildStatic で導出）
   speed: 1,
   lambda: 530,
   playing: true,
@@ -124,7 +125,10 @@ const bar = new THREE.Mesh(
 axisBar.add(bar);
 
 addLabel('偏光板', '#cdd3dc', new THREE.Vector3(X_POL, 0, TRANS_R + 0.9), 0.36);
-addLabel('透過軸', '#ffe27a', new THREE.Vector3(X_POL, TRANS_R + 0.5, 0), 0.3);
+// 透過軸ラベルはバーと一緒に回る（axisBar の子にする）
+const axisBarLabel = makeTextSprite('透過軸', '#ffe27a', 0.28);
+axisBarLabel.position.set(0, TRANS_R + 0.45, 0);
+axisBar.add(axisBarLabel);
 
 // ---------- 波長板（直方体）----------
 const plate = new THREE.Group();
@@ -143,11 +147,17 @@ plate.add(new THREE.LineSegments(
   new THREE.LineBasicMaterial({ color: 0x4a8fb5, transparent: true, opacity: 0.6 })
 ).translateX((X_IN + X_OUT) / 2));
 
-// 入口面の進相軸(+Y)・遅相軸(+Z)矢印
-plate.add(new THREE.ArrowHelper(
-  new THREE.Vector3(0, 1, 0), new THREE.Vector3(X_IN, 0, 0), TRANS_R, FAST_COLOR, 0.28, 0.18));
-plate.add(new THREE.ArrowHelper(
-  new THREE.Vector3(0, 0, 1), new THREE.Vector3(X_IN, 0, 0), TRANS_R, SLOW_COLOR, 0.28, 0.18));
+// 入口面の軸ガイド（進相軸 = ±Y / 遅相軸 = ±Z）。実際の振動は伸縮矢印で表すので、
+// ここは軸の向きだけを示す薄い線にする
+function addAxisGuide(dir, color) {
+  const o = new THREE.Vector3(X_IN, 0, 0);
+  plate.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([
+      o.clone().addScaledVector(dir, -TRANS_R), o.clone().addScaledVector(dir, TRANS_R)]),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.3 })));
+}
+addAxisGuide(new THREE.Vector3(0, 1, 0), FAST_COLOR);
+addAxisGuide(new THREE.Vector3(0, 0, 1), SLOW_COLOR);
 addLabel('波長板', '#cdd3dc', new THREE.Vector3((X_IN + X_OUT) / 2, 0, TRANS_R + 1.0), 0.36);
 addLabel('進相軸(速)', '#7fe6dc', new THREE.Vector3(X_IN, TRANS_R + 0.45, 0), 0.28);
 addLabel('遅相軸(遅)', '#ffc078', new THREE.Vector3(X_IN, 0, TRANS_R + 0.45), 0.28);
@@ -155,7 +165,7 @@ addLabel('遅相軸(遅)', '#ffc078', new THREE.Vector3(X_IN, 0, TRANS_R + 0.45)
 // 区間ラベル
 addLabel('直線偏光', '#9aa4b2', new THREE.Vector3((X_POL + X_IN) / 2, 0, -TRANS_R - 0.9), 0.3);
 addLabel('楕円偏光', '#9aa4b2', new THREE.Vector3((X_OUT + X_SCREEN) / 2, 0, -TRANS_R - 0.9), 0.3);
-addLabel('スクリーン', '#9aa4b2', new THREE.Vector3(X_SCREEN, 0, -TRANS_R - 0.9), 0.28);
+addLabel('受光板', '#9aa4b2', new THREE.Vector3(X_SCREEN, 0, -TRANS_R - 1.3), 0.32);
 
 // ---------- 波（毎フレーム更新するライン）----------
 // 汎用: n+1 頂点のラインを作り、Float32 の位置配列を返す
@@ -198,15 +208,24 @@ const combOutLines = new THREE.LineSegments(combOutGeom,
 combOutLines.frustumCulled = false;
 scene.add(combOutLines);
 
-// スクリーン面と楕円リング
+// 受光板（スクリーン）面と楕円リング。手前に見えるので少し大きめ＆枠付き
+const SCREEN_R = TRANS_R * 1.15;
 const screenPlane = new THREE.Mesh(
-  new THREE.PlaneGeometry(2 * TRANS_R, 2 * TRANS_R),
+  new THREE.PlaneGeometry(2 * SCREEN_R, 2 * SCREEN_R),
   new THREE.MeshBasicMaterial({
-    color: 0x9fb3d0, transparent: true, opacity: 0.08, side: THREE.DoubleSide })
+    color: 0x9fb3d0, transparent: true, opacity: 0.14, side: THREE.DoubleSide })
 );
 screenPlane.rotation.y = Math.PI / 2;    // YZ 面へ
 screenPlane.position.set(X_SCREEN, 0, 0);
 scene.add(screenPlane);
+// 受光板の外枠（手前にあることを分かりやすく）
+const screenFrame = new THREE.LineSegments(
+  new THREE.EdgesGeometry(screenPlane.geometry),
+  new THREE.LineBasicMaterial({ color: 0x9fb3d0, transparent: true, opacity: 0.7 })
+);
+screenFrame.rotation.copy(screenPlane.rotation);
+screenFrame.position.copy(screenPlane.position);
+scene.add(screenFrame);
 
 const N_ELL = 128;
 const ellPos = new Float32Array((N_ELL + 1) * 3);
@@ -221,26 +240,37 @@ let exitArrow = new THREE.ArrowHelper(
   new THREE.Vector3(0, 1, 0), new THREE.Vector3(X_SCREEN, 0, 0), 1, waveColor, 0.3, 0.2);
 scene.add(exitArrow);
 
-// 波長板の出口面（到達面）: 進相波・遅相波・合成波の伸縮する矢印
-const exitOrigin = new THREE.Vector3(X_OUT, 0, 0);
-const exitFace = new THREE.Mesh(
-  new THREE.PlaneGeometry(2 * TRANS_R, 2 * TRANS_R),
-  new THREE.MeshBasicMaterial({
-    color: 0x8ecbff, transparent: true, opacity: 0.07, side: THREE.DoubleSide })
-);
-exitFace.rotation.y = Math.PI / 2;   // YZ 面へ
-exitFace.position.copy(exitOrigin);
-scene.add(exitFace);
+// 波長板の入口面・出口面: 進相波・遅相波・合成波の伸縮する矢印
+// 入口面は位相差 0（2成分が同位相＝直線偏光）、出口面は遅相軸が δ だけ遅れた状態を示す
+const entryOrigin = new THREE.Vector3(X_IN, 0, 0);
+const exitOrigin  = new THREE.Vector3(X_OUT, 0, 0);
+
+function makeFacePlane(origin) {
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(2 * TRANS_R, 2 * TRANS_R),
+    new THREE.MeshBasicMaterial({
+      color: 0x8ecbff, transparent: true, opacity: 0.07, side: THREE.DoubleSide })
+  );
+  m.rotation.y = Math.PI / 2;   // YZ 面へ
+  m.position.copy(origin);
+  scene.add(m);
+  return m;
+}
+const entryFace = makeFacePlane(entryOrigin);
+const exitFace  = makeFacePlane(exitOrigin);
 
 // 伸縮矢印（毎フレーム向き・長さを更新）。長さ 0 付近では非表示にする
-function makeExitArrow(color) {
-  const a = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), exitOrigin, 0.001, color, 0.22, 0.14);
+function makeFaceArrow(origin, color) {
+  const a = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), origin, 0.001, color, 0.22, 0.14);
   scene.add(a);
   return a;
 }
-const arrowFast = makeExitArrow(FAST_COLOR); // 進相波（Y）
-const arrowSlow = makeExitArrow(SLOW_COLOR); // 遅相波（Z）
-const arrowComb = makeExitArrow(waveColor);  // 合成波（Y+Z）
+const arrowFastIn = makeFaceArrow(entryOrigin, FAST_COLOR); // 入口: 進相軸成分（Y）
+const arrowSlowIn = makeFaceArrow(entryOrigin, SLOW_COLOR); // 入口: 遅相軸成分（Z）
+const arrowCombIn = makeFaceArrow(entryOrigin, waveColor);  // 入口: 合成（入射の直線偏光）
+const arrowFast = makeFaceArrow(exitOrigin, FAST_COLOR);    // 出口: 進相波（Y）
+const arrowSlow = makeFaceArrow(exitOrigin, SLOW_COLOR);    // 出口: 遅相波（Z）
+const arrowComb = makeFaceArrow(exitOrigin, waveColor);     // 出口: 合成波（Y+Z）
 
 // 矢印を成分ベクトル (0, vy, vz) に合わせて伸縮させる
 function setArrow(arrow, vy, vz) {
@@ -252,13 +282,26 @@ function setArrow(arrow, vy, vz) {
 }
 
 // ---------- 静的な再構築（φ/δ/λ 変更時）----------
+// 透過軸の単位ベクトル u = (0, sinφ, cosφ)
+//   φ = 0° … 遅相軸(+Z, 縦)と一致。φ を増やすと +Z → +Y へ回る
+//   （＝光の進む向き +X を後ろから見て左回り＝反時計回りがプラス）
+function transAxis(v = new THREE.Vector3()) {
+  return v.set(0, Math.sin(stateP.phi), Math.cos(stateP.phi));
+}
+
+// 進相軸(Y)成分・遅相軸(Z)成分の振幅
 function amps() {
-  return { Ef: A * Math.cos(stateP.phi), Es: A * Math.sin(stateP.phi) };
+  return { Ef: A * Math.sin(stateP.phi), Es: A * Math.cos(stateP.phi) };
 }
 
 function rebuildStatic() {
-  // 透過軸バーを φ 回転（+Y を (0,cosφ,sinφ) へ）
-  axisBar.rotation.x = stateP.phi;
+  // 位相差は「光路差 Γ [nm]」と「波長 λ [nm]」から決まる: δ = 2π·Γ/λ
+  // → 同じ板でも波長を変えると δ が変わる（λ/4 板は設計波長でだけ λ/4）
+  stateP.delta = 2 * Math.PI * stateP.retard / stateP.lambda;
+
+  // 透過軸バー（既定で +Y 向き）を u = (0, sinφ, cosφ) に合わせる。
+  // X 軸まわりの回転は +Y →(0, cos a, sin a) なので a = 90° − φ
+  axisBar.rotation.x = Math.PI / 2 - stateP.phi;
 
   // 波の色
   const col = new THREE.Color(wavelengthToColor(stateP.lambda));
@@ -269,6 +312,7 @@ function rebuildStatic() {
   ellipse.material.color.copy(col);
   exitArrow.setColor(col);
   arrowComb.setColor(col);
+  arrowCombIn.setColor(col);
 
   // スクリーン上の楕円リング: ψ を 0..2π 掃引
   const { Ef, Es } = amps();
@@ -289,7 +333,6 @@ const statusEl = document.getElementById('status');
 const dotHtml = c => `<span class="dot" style="background:${c}"></span>`;
 
 function classifyOutput() {
-  const phiDeg = THREE.MathUtils.radToDeg(stateP.phi);
   const dDeg = THREE.MathUtils.radToDeg(stateP.delta);
   const { Ef, Es } = amps();
   const near = (a, b, t = 6) => Math.abs(((a - b + 540) % 360) - 180) < t;
@@ -297,34 +340,51 @@ function classifyOutput() {
   if (Math.abs(Ef) < 1e-3 || Math.abs(Es) < 1e-3) return '直線偏光（軸に一致）';
   if (near(dDeg, 0) || near(dDeg, 360)) return '直線偏光（入射と同じ）';
   if (near(dDeg, 180)) return '直線偏光（進相軸で反転）';
-  const circ = (near(dDeg, 90) || near(dDeg, 270)) && Math.abs(Math.abs(phiDeg % 180) - 45) < 4;
+  // 円になるのは δ=±90° かつ2成分の振幅が等しいとき（φ=45°, 135° の両方）
+  const circ = (near(dDeg, 90) || near(dDeg, 270)) &&
+    Math.abs(Math.abs(Ef) - Math.abs(Es)) < 0.1 * A;
   if (circ) return '円偏光';
-  // 回転の向き（y z' − z y' の符号 = −Ef·Es·sinδ）
+  // 回転の向き（y z' − z y' の符号 = −Ef·Es·sinδ）。表示は受光側から見た向き
   const hand = -Ef * Es * Math.sin(stateP.delta);
   return `楕円偏光（${hand < 0 ? '右回り' : '左回り'}）`;
+}
+
+// 光路差 Γ が現在の波長の何倍か（λ/4 板・λ/2 板 …の判定用）
+function retardRatio() {
+  return stateP.retard / stateP.lambda;
 }
 
 function updateStatus() {
   const phiDeg = Math.round(THREE.MathUtils.radToDeg(stateP.phi));
   const dDeg = Math.round(THREE.MathUtils.radToDeg(stateP.delta));
+  const dNorm = ((dDeg % 360) + 360) % 360;      // 偏光状態を決めるのは δ mod 360°
+  const ratio = retardRatio();
   const { Ef, Es } = amps();
   const col = wavelengthToColor(stateP.lambda);
+  const frac = ratio % 1;                        // λ の整数倍を除いた端数（これが効く）
+  const whole = ratio >= 1;
   let plateName = '';
-  if (Math.abs(dDeg - 90) < 4) plateName = ' (λ/4 板)';
-  else if (Math.abs(dDeg - 180) < 4) plateName = ' (λ/2 板)';
-  else if (Math.abs(dDeg - 360) < 4 || dDeg < 4) plateName = ' (λ 板)';
+  if (Math.abs(frac - 0.25) < 0.01) plateName = whole ? '（λ/4 板と等価）' : '（λ/4 板）';
+  else if (Math.abs(frac - 0.5) < 0.01) plateName = whole ? '（λ/2 板と等価）' : '（λ/2 板）';
+  else if (frac < 0.01 || frac > 0.99) {
+    const n = Math.round(ratio);
+    plateName = n === 0 ? '（板なし）' : n === 1 ? '（λ 板）' : `（${n}λ 板）`;
+  }
   statusEl.innerHTML =
-    `${dotHtml(col)}入射: 直線偏光　φ = ${phiDeg}°\n` +
+    `${dotHtml(col)}入射: 直線偏光　φ = ${phiDeg}°（遅相軸から）\n` +
     `分解 → ${dotHtml('#36d1c4')}進相 Ef=${Ef.toFixed(2)}　` +
     `${dotHtml('#ff9d3c')}遅相 Es=${Es.toFixed(2)}\n` +
-    `位相差 δ = ${dDeg}°${plateName}\n` +
+    `光路差 Γ = ${Math.round(stateP.retard)} nm = ${ratio.toFixed(2)}λ ${plateName}\n` +
+    `位相差 δ = ${dDeg}°${dDeg !== dNorm ? `（≡ ${dNorm}°）` : ''}\n` +
     `出力: <b>${classifyOutput()}</b>`;
 }
 
 // ---------- 波の更新（毎フレーム）----------
+const _u = new THREE.Vector3();
+
 function updateWaves(t) {
   const { Ef, Es } = amps();
-  const u = new THREE.Vector3(0, Math.cos(stateP.phi), Math.sin(stateP.phi));
+  const u = transAxis(_u);
 
   // 入射（合成の直線偏光）: E = A cos(kx − ωt) u
   for (let i = 0; i <= N_IN; i++) {
@@ -384,6 +444,13 @@ function updateWaves(t) {
   }
   combOutGeom.attributes.position.needsUpdate = true;
 
+  // 入口面の伸縮矢印: X_IN での各成分（frac = 0 なので2成分は同位相）
+  const yfI = Ef * Math.cos(K * X_IN - OMEGA * t);
+  const zsI = Es * Math.cos(K * X_IN - OMEGA * t);
+  setArrow(arrowFastIn, yfI, 0);   // 進相軸成分（Y方向に伸縮）
+  setArrow(arrowSlowIn, 0, zsI);   // 遅相軸成分（Z方向に伸縮）
+  setArrow(arrowCombIn, yfI, zsI); // 合成＝入射の直線偏光（透過軸の向きに伸縮）
+
   // 出口面（到達面）の伸縮矢印: X_OUT での各成分（遅相軸は位相差 δ）
   const yfE = Ef * Math.cos(K * X_OUT - OMEGA * t);
   const zsE = Es * Math.cos(K * X_OUT - OMEGA * t - stateP.delta);
@@ -406,15 +473,90 @@ const viewEl = document.getElementById('view');
 const renderer = new THREE.WebGLRenderer({
   canvas: viewEl.querySelector('canvas'), antialias: true });
 
-const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
 camera.up.set(0, 0, 1);
-camera.position.set(3, -16, 8);
+
+// 初期視点: 偏光板(−X 側)が左奥＝画面の左上、受光板(+X 側)が右手前＝画面の右下に来る向き。
+// VIEW_DIR は「注視点 → カメラ」の単位ベクトル（+X が画面の右下かつ手前へ向かう）
+const VIEW_DIR = new THREE.Vector3(0.55, -0.66, 0.51).normalize();
+const VIEW_TARGET = new THREE.Vector3(1.2, 0, 0.1);
 
 const controls = new OrbitControls(camera, viewEl);
 controls.enableDamping = true;
-controls.target.set(1, 0, 0.4);
+controls.target.copy(VIEW_TARGET);
 controls.minDistance = 6;
 controls.maxDistance = 60;
+
+// ---------- 表示エリアに合わせた自動フィット ----------
+// シーンの外接ボックス8隅（ラベル分の余白込み）が画角に収まる距離までカメラを引く。
+// 3Dビューの縦横比は表示エリア次第なので、初期表示・リサイズ時に毎回計算し直す。
+const FIT_MARGIN = 0.95;                     // 画角に対する余白（1 で余白なし）
+// [x, |y| の広がり, z 下端, z 上端] … 各断面の四隅を収める。ラベル分の余白込み
+const FIT_STATIONS = [
+  [X_POL - 0.9,    TRANS_R + 0.2,  -(TRANS_R + 0.3), TRANS_R + 0.3],
+  [X_POL,          TRANS_R + 0.7,  -(TRANS_R + 0.4), TRANS_R + 1.2],
+  [X_IN,           TRANS_R + 0.7,  -(TRANS_R + 1.2), TRANS_R + 1.3],
+  [X_OUT,          TRANS_R + 0.2,  -(TRANS_R + 0.4), TRANS_R + 1.3],
+  [X_SCREEN + 0.3, SCREEN_R + 0.3, -(TRANS_R + 1.7), SCREEN_R + 0.3],
+];
+const FIT_POINTS = [];
+for (const [x, hy, z0, z1] of FIT_STATIONS)
+  for (const y of [-hy, hy])
+    for (const z of [z0, z1])
+      FIT_POINTS.push(new THREE.Vector3(x, y, z));
+
+const _dir = new THREE.Vector3(), _view = new THREE.Vector3();
+const _right = new THREE.Vector3(), _up = new THREE.Vector3();
+const _rel = new THREE.Vector3(), _fitTarget = new THREE.Vector3();
+
+function frameScene() {
+  _dir.copy(camera.position).sub(controls.target);
+  if (_dir.lengthSq() < 1e-6) _dir.copy(VIEW_DIR);
+  _dir.normalize();
+  _view.copy(_dir).negate();                       // 視線方向
+  _right.crossVectors(_view, camera.up).normalize();
+  _up.crossVectors(_right, _view).normalize();
+
+  const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * FIT_MARGIN;
+  const tanH = tanV * camera.aspect;
+
+  // 「注視点を画面中央に寄せる」→「距離を詰める」を数回反復して収束させる。
+  // 透視投影なので手前(受光板)側ほど大きく写り、一発では中央に来ないため反復する。
+  const target = _fitTarget.copy(VIEW_TARGET);
+  let dist = 20;
+  for (let iter = 0; iter < 8; iter++) {
+    let minH = Infinity, maxH = -Infinity, minV = Infinity, maxV = -Infinity;
+    for (const p of FIT_POINTS) {
+      _rel.copy(p).sub(target);
+      const depth = _rel.dot(_view) + dist;
+      if (depth < 0.2) continue;
+      const h = _rel.dot(_right) / depth, v = _rel.dot(_up) / depth;
+      if (h < minH) minH = h;
+      if (h > maxH) maxH = h;
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+    if (!isFinite(minH)) break;
+    // 投影範囲の中心のズレ分だけ注視点を横・縦にスライド
+    target.addScaledVector(_right, ((minH + maxH) / 2) * dist)
+          .addScaledVector(_up,    ((minV + maxV) / 2) * dist);
+    // 投影サイズは距離にほぼ反比例 → はみ出し比率をそのまま距離に掛ける
+    const over = Math.max((maxH - minH) / 2 / tanH, (maxV - minV) / 2 / tanV);
+    dist = THREE.MathUtils.clamp(dist * over, controls.minDistance, controls.maxDistance);
+  }
+
+  controls.target.copy(target);
+  camera.position.copy(target).addScaledVector(_dir, dist);
+}
+
+// ユーザーが視点を操作したら自動フィットは止める（勝手にズームが戻らないように）
+let userAdjusted = false;
+controls.addEventListener('start', () => { userAdjusted = true; });
+
+camera.position.copy(VIEW_TARGET).addScaledVector(VIEW_DIR, 20);
+camera.aspect = (viewEl.clientWidth || 1) / (viewEl.clientHeight || 1);
+camera.updateProjectionMatrix();
+frameScene();
 
 const sizeVec = new THREE.Vector2();
 let t = 0, last = performance.now();
@@ -431,9 +573,12 @@ function render(now) {
   if (w > 0 && h > 0) {
     if (renderer.getPixelRatio() !== dpr) renderer.setPixelRatio(dpr);
     renderer.getSize(sizeVec);
-    if (sizeVec.x !== w || sizeVec.y !== h) renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
+    if (sizeVec.x !== w || sizeVec.y !== h) {
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      if (!userAdjusted) frameScene();     // 表示エリアの大きさに合わせて収め直す
+    }
     renderer.render(scene, camera);
   }
   requestAnimationFrame(render);
@@ -442,8 +587,9 @@ function render(now) {
 // ---------- UI ----------
 const phiEl = document.getElementById('phi');
 const phiValEl = document.getElementById('phiVal');
-const deltaEl = document.getElementById('delta');
-const deltaValEl = document.getElementById('deltaVal');
+const retardEl = document.getElementById('retard');
+const retardValEl = document.getElementById('retardVal');
+const deltaInfoEl = document.getElementById('deltaInfo');
 const speedEl = document.getElementById('speed');
 const speedValEl = document.getElementById('speedVal');
 const lambdaEl = document.getElementById('lambda');
@@ -456,39 +602,50 @@ phiEl.addEventListener('input', () => {
   phiValEl.textContent = `${phiEl.value}°`;
   rebuildStatic();
 });
-deltaEl.addEventListener('input', () => {
-  stateP.delta = THREE.MathUtils.degToRad(parseFloat(deltaEl.value));
-  deltaValEl.textContent = `${deltaEl.value}°`;
-  syncDeltaButtons();
-  rebuildStatic();
+retardEl.addEventListener('input', () => {
+  stateP.retard = parseFloat(retardEl.value);
+  applyRetard();
 });
 speedEl.addEventListener('input', () => {
   stateP.speed = parseFloat(speedEl.value);
   speedValEl.textContent = `${stateP.speed.toFixed(1)}×`;
 });
 lambdaEl.addEventListener('input', () => {
+  // 板の光路差 Γ は据え置き。波長が変われば δ = 2π·Γ/λ が変わる（λ/4 板が λ/4 でなくなる）
   stateP.lambda = parseFloat(lambdaEl.value);
   lambdaValEl.textContent = `${lambdaEl.value}nm`;
-  rebuildStatic();
+  applyRetard();
 });
 playBtn.addEventListener('click', () => {
   stateP.playing = !stateP.playing;
   playBtn.textContent = stateP.playing ? '⏸ 一時停止' : '▶ 再生';
 });
+// プリセットは「現在の波長を設計波長として Γ = frac·λ の板を入れる」
 deltaBtns.querySelectorAll('button').forEach(btn => {
   btn.addEventListener('click', () => {
-    deltaEl.value = btn.dataset.delta;
-    stateP.delta = THREE.MathUtils.degToRad(parseFloat(btn.dataset.delta));
-    deltaValEl.textContent = `${btn.dataset.delta}°`;
-    syncDeltaButtons();
-    rebuildStatic();
+    stateP.retard = Math.round(parseFloat(btn.dataset.frac) * stateP.lambda);
+    applyRetard();
   });
 });
-function syncDeltaButtons() {
-  deltaBtns.querySelectorAll('button').forEach(btn =>
-    btn.classList.toggle('active', Math.abs(parseFloat(btn.dataset.delta) - parseFloat(deltaEl.value)) < 1));
+
+// Γ 変更・λ 変更をまとめて UI へ反映
+function applyRetard() {
+  stateP.retard = THREE.MathUtils.clamp(
+    stateP.retard, parseFloat(retardEl.min), parseFloat(retardEl.max));
+  retardEl.value = stateP.retard;
+  retardValEl.textContent = `${Math.round(stateP.retard)}nm`;
+  rebuildStatic();     // ここで δ = 2π·Γ/λ が再計算される
+  const dDeg = THREE.MathUtils.radToDeg(stateP.delta);
+  deltaInfoEl.textContent =
+    `位相差 δ = ${dDeg.toFixed(0)}°　（Γ = ${retardRatio().toFixed(2)}λ）`;
+  syncDeltaButtons();
 }
 
-syncDeltaButtons();
-rebuildStatic();
+function syncDeltaButtons() {
+  deltaBtns.querySelectorAll('button').forEach(btn =>
+    btn.classList.toggle('active',
+      Math.abs(retardRatio() - parseFloat(btn.dataset.frac)) < 0.005));
+}
+
+applyRetard();
 requestAnimationFrame(render);

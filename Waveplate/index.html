@@ -47,6 +47,7 @@
     gap: 8px;
   }
   .row label { font-size: 12px; flex: none; }
+  .note { font-size: 11px; color: #8ecbff; text-align: right; margin: -2px 0 2px; line-height: 1.5; }
   .row .val { font-size: 12px; color: #8ecbff; width: 64px; text-align: right; flex: none; }
   input[type="range"] { flex: 1; min-width: 0; accent-color: #8ecbff; }
 
@@ -106,7 +107,7 @@
   }
   #caption {
     position: absolute;
-    top: 8px;
+    bottom: 8px;
     left: 10px;
     font-size: 11px;
     color: #9aa4b2;
@@ -129,20 +130,22 @@
         <input id="phi" type="range" min="0" max="180" step="1" value="45">
         <span class="val" id="phiVal">45°</span>
       </div>
+      <div class="note">φ = 0° は遅相軸（縦）。光の進む向きを<br>後ろから見て左回り（反時計回り）がプラス</div>
     </fieldset>
 
     <fieldset>
-      <legend>波長板（位相差 δ）</legend>
+      <legend>波長板（光路差 Γ）</legend>
       <div class="btns" id="deltaBtns">
-        <button data-delta="90">λ/4 板</button>
-        <button data-delta="180">λ/2 板</button>
-        <button data-delta="360">λ 板</button>
+        <button data-frac="0.25">λ/4 板</button>
+        <button data-frac="0.5">λ/2 板</button>
+        <button data-frac="1">λ 板</button>
       </div>
       <div class="row">
-        <label for="delta">δ</label>
-        <input id="delta" type="range" min="0" max="360" step="1" value="90">
-        <span class="val" id="deltaVal">90°</span>
+        <label for="retard">光路差 Γ</label>
+        <input id="retard" type="range" min="0" max="800" step="1" value="133">
+        <span class="val" id="retardVal">133nm</span>
       </div>
+      <div class="note" id="deltaInfo"></div>
     </fieldset>
 
     <fieldset>
@@ -165,7 +168,10 @@
     <div id="hint">
       3Dビュー: ドラッグで回転 / ホイールでズーム<br>
       偏光板を回すと入射偏光の向きが変わり、<br>
-      板を出た光の楕円形状が変化します。
+      板を出た光の楕円形状が変化します。<br><br>
+      光路差 Γ は板の厚みで決まる固定値なので、<br>
+      波長を変えると δ = 2π·Γ/λ が変化します<br>
+      （λ/4 板が λ/4 なのは設計波長のときだけ）。
     </div>
   </div>
 
