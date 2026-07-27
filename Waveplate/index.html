@@ -48,6 +48,17 @@
   }
   .row label { font-size: 12px; flex: none; }
   .note { font-size: 11px; color: #8ecbff; text-align: right; margin: -2px 0 2px; line-height: 1.5; }
+
+  /* ---- チェックボックス ---- */
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    margin: 4px 0 8px;
+    cursor: pointer;
+  }
+  .check input { accent-color: #8ecbff; cursor: pointer; }
   .row .val { font-size: 12px; color: #8ecbff; width: 64px; text-align: right; flex: none; }
   input[type="range"] { flex: 1; min-width: 0; accent-color: #8ecbff; }
 
@@ -146,6 +157,15 @@
         <span class="val" id="retardVal">133nm</span>
       </div>
       <div class="note" id="deltaInfo"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>表示</legend>
+      <label class="check">
+        <input type="checkbox" id="exitTrace" checked>
+        波長板出口の合成波の軌跡（楕円）
+      </label>
+      <div class="note">受光板と同じ楕円を出口面にも描きます</div>
     </fieldset>
 
     <fieldset>

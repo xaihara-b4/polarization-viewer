@@ -235,6 +235,16 @@ const ellipse = new THREE.LineLoop(ellGeom, new THREE.LineBasicMaterial({ color:
 ellipse.frustumCulled = false;
 scene.add(ellipse);
 
+// 波長板出口面（X_OUT）の軌跡。受光板と同じ楕円を描く（Ef, Es, δ が同じなので形も同じ）
+// UI のチェックボックスで表示/非表示を切り替える
+const exitEllPos = new Float32Array((N_ELL + 1) * 3);
+const exitEllGeom = new THREE.BufferGeometry();
+exitEllGeom.setAttribute('position', new THREE.BufferAttribute(exitEllPos, 3));
+const exitEllipse = new THREE.LineLoop(exitEllGeom,
+  new THREE.LineBasicMaterial({ color: waveColor, transparent: true, opacity: 0.9 }));
+exitEllipse.frustumCulled = false;
+scene.add(exitEllipse);
+
 // スクリーン上で回る電場ベクトル
 let exitArrow = new THREE.ArrowHelper(
   new THREE.Vector3(0, 1, 0), new THREE.Vector3(X_SCREEN, 0, 0), 1, waveColor, 0.3, 0.2);
@@ -326,20 +336,27 @@ function rebuildStatic() {
   combLines.material.color.copy(col);
   combOutLines.material.color.copy(col);
   ellipse.material.color.copy(col);
+  exitEllipse.material.color.copy(col);
   exitArrow.setColor(col);
   arrowComb.setColor(col);
   arrowCombIn.setColor(col);
 
-  // スクリーン上の楕円リング: ψ を 0..2π 掃引
+  // 楕円リング: ψ を 0..2π 掃引。受光板(X_SCREEN)と波長板出口(X_OUT)は同じ形になる
   const { Ef, Es } = amps();
   const d = stateP.delta;
   for (let i = 0; i <= N_ELL; i++) {
     const psi = (i / N_ELL) * 2 * Math.PI;
+    const y = Ef * Math.cos(psi);
+    const z = Es * Math.cos(psi - d);
     ellPos[i * 3]     = X_SCREEN;
-    ellPos[i * 3 + 1] = Ef * Math.cos(psi);
-    ellPos[i * 3 + 2] = Es * Math.cos(psi - d);
+    ellPos[i * 3 + 1] = y;
+    ellPos[i * 3 + 2] = z;
+    exitEllPos[i * 3]     = X_OUT;
+    exitEllPos[i * 3 + 1] = y;
+    exitEllPos[i * 3 + 2] = z;
   }
   ellGeom.attributes.position.needsUpdate = true;
+  exitEllGeom.attributes.position.needsUpdate = true;
 
   updateStatus();
 }
@@ -619,6 +636,7 @@ const speedEl = document.getElementById('speed');
 const speedValEl = document.getElementById('speedVal');
 const lambdaEl = document.getElementById('lambda');
 const lambdaValEl = document.getElementById('lambdaVal');
+const exitTraceEl = document.getElementById('exitTrace');
 const playBtn = document.getElementById('playBtn');
 const stepBackBtn = document.getElementById('stepBack');
 const stepFwdBtn = document.getElementById('stepFwd');
@@ -643,6 +661,12 @@ lambdaEl.addEventListener('input', () => {
   lambdaValEl.textContent = `${lambdaEl.value}nm`;
   applyRetard();
 });
+// 波長板出口の軌跡（楕円）の表示切替
+exitTraceEl.addEventListener('change', () => {
+  exitEllipse.visible = exitTraceEl.checked;
+});
+exitEllipse.visible = exitTraceEl.checked;   // リロード時のチェック状態に合わせる
+
 playBtn.addEventListener('click', () => {
   stateP.playing = !stateP.playing;
   playBtn.textContent = stateP.playing ? '⏸ 一時停止' : '▶ 再生';
