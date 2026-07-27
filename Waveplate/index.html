@@ -151,6 +151,11 @@
     <fieldset>
       <legend>アニメーション</legend>
       <button id="playBtn">⏸ 一時停止</button>
+      <div class="btns" id="stepBtns">
+        <button id="stepBack" title="1/24 周期ぶん戻す">◀ コマ戻し</button>
+        <button id="stepFwd" title="1/24 周期ぶん進める">コマ送り ▶</button>
+      </div>
+      <div class="note">コマ送りは 1/24 周期（位相 15°）ずつ。<br>再生中に押すと一時停止します</div>
       <div class="row">
         <label for="speed">速度</label>
         <input id="speed" type="range" min="0" max="3" step="0.05" value="1">

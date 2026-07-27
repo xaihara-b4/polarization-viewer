@@ -272,6 +272,22 @@ const arrowFast = makeFaceArrow(exitOrigin, FAST_COLOR);    // 出口: 進相波
 const arrowSlow = makeFaceArrow(exitOrigin, SLOW_COLOR);    // 出口: 遅相波（Z）
 const arrowComb = makeFaceArrow(exitOrigin, waveColor);     // 出口: 合成波（Y+Z）
 
+// 出口面の「合成＝進相＋遅相」を示す補助線（平行四辺形の残り2辺・破線）
+//   進相の先端 → 合成の先端 は遅相ベクトルの平行移動なので遅相色、その逆は進相色
+const combGuidePos = new Float32Array(4 * 3);
+const combGuideCol = new Float32Array(4 * 3);
+const combGuideGeom = new THREE.BufferGeometry();
+combGuideGeom.setAttribute('position', new THREE.BufferAttribute(combGuidePos, 3));
+combGuideGeom.setAttribute('color', new THREE.BufferAttribute(combGuideCol, 3));
+[new THREE.Color(SLOW_COLOR), new THREE.Color(SLOW_COLOR),
+ new THREE.Color(FAST_COLOR), new THREE.Color(FAST_COLOR)].forEach((c, i) => {
+  combGuideCol[i * 3] = c.r; combGuideCol[i * 3 + 1] = c.g; combGuideCol[i * 3 + 2] = c.b;
+});
+const combGuide = new THREE.LineSegments(combGuideGeom, new THREE.LineDashedMaterial({
+  vertexColors: true, transparent: true, opacity: 0.85, dashSize: 0.13, gapSize: 0.09 }));
+combGuide.frustumCulled = false;
+scene.add(combGuide);
+
 // 矢印を成分ベクトル (0, vy, vz) に合わせて伸縮させる
 function setArrow(arrow, vy, vz) {
   const len = Math.hypot(vy, vz);
@@ -458,6 +474,15 @@ function updateWaves(t) {
   setArrow(arrowSlow, 0, zsE);   // 遅相波（Z方向に伸縮）
   setArrow(arrowComb, yfE, zsE); // 合成波（Y+Z の合成ベクトル）
 
+  // 各成分の先端から合成の先端へ引く補助線（平行四辺形を閉じる2辺）
+  combGuidePos[0] = X_OUT; combGuidePos[1]  = yfE; combGuidePos[2]  = 0;    // 進相の先端
+  combGuidePos[3] = X_OUT; combGuidePos[4]  = yfE; combGuidePos[5]  = zsE;  //  → 合成の先端
+  combGuidePos[6] = X_OUT; combGuidePos[7]  = 0;   combGuidePos[8]  = zsE;  // 遅相の先端
+  combGuidePos[9] = X_OUT; combGuidePos[10] = yfE; combGuidePos[11] = zsE;  //  → 合成の先端
+  combGuideGeom.attributes.position.needsUpdate = true;
+  combGuide.computeLineDistances();               // 破線の長さを毎フレーム計算し直す
+  combGuide.visible = Math.abs(yfE) > 0.02 && Math.abs(zsE) > 0.02;
+
   // スクリーン上の回転ベクトル: ψ = k·X_SCREEN − ωt
   const psi = K * X_SCREEN - OMEGA * t;
   const ey = Ef * Math.cos(psi), ez = Es * Math.cos(psi - stateP.delta);
@@ -595,6 +620,8 @@ const speedValEl = document.getElementById('speedVal');
 const lambdaEl = document.getElementById('lambda');
 const lambdaValEl = document.getElementById('lambdaVal');
 const playBtn = document.getElementById('playBtn');
+const stepBackBtn = document.getElementById('stepBack');
+const stepFwdBtn = document.getElementById('stepFwd');
 const deltaBtns = document.getElementById('deltaBtns');
 
 phiEl.addEventListener('input', () => {
@@ -620,6 +647,18 @@ playBtn.addEventListener('click', () => {
   stateP.playing = !stateP.playing;
   playBtn.textContent = stateP.playing ? '⏸ 一時停止' : '▶ 再生';
 });
+
+// コマ送り: 1/24 周期（位相 15°）ずつ時刻 t を動かす。再生中に押したら一時停止する
+const STEP_T = (2 * Math.PI / OMEGA) / 24;
+function stepTime(dir) {
+  if (stateP.playing) {
+    stateP.playing = false;
+    playBtn.textContent = '▶ 再生';
+  }
+  t += dir * STEP_T;     // 描画は render() が毎フレーム updateWaves(t) するので任せる
+}
+stepBackBtn.addEventListener('click', () => stepTime(-1));
+stepFwdBtn.addEventListener('click', () => stepTime(1));
 // プリセットは「現在の波長を設計波長として Γ = frac·λ の板を入れる」
 deltaBtns.querySelectorAll('button').forEach(btn => {
   btn.addEventListener('click', () => {
