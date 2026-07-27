@@ -109,17 +109,29 @@
     position: relative;
     min-width: 0;
   }
-  #view canvas {
+  #gl {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     display: block;
   }
+  /* 左下の極座標図（出口面を真正面から見た図） */
+  #polar {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    width: min(248px, 34vw);
+    height: min(248px, 34vw);
+    background: rgba(20, 23, 28, 0.78);
+    border: 1px solid #2c313a;
+    border-radius: 8px;
+    pointer-events: none;
+  }
   #caption {
     position: absolute;
-    bottom: 8px;
-    left: 10px;
+    top: 8px;
+    right: 10px;
     font-size: 11px;
     color: #9aa4b2;
     background: rgba(20, 23, 28, 0.7);
@@ -166,6 +178,16 @@
         波長板出口の合成波の軌跡（楕円）
       </label>
       <div class="note">受光板と同じ楕円を出口面にも描きます</div>
+
+      <label class="check">
+        <input type="checkbox" id="polarShow" checked>
+        出口面の極座標図（3Dビュー左下）
+      </label>
+      <div class="btns" id="polarRefBtns">
+        <button data-ref="slow">0° = 遅相軸</button>
+        <button data-ref="trans">0° = 透過軸</button>
+      </div>
+      <div class="note">極座標図の上向き（0°）をどちらの軸に<br>合わせるかを選びます</div>
     </fieldset>
 
     <fieldset>
@@ -192,8 +214,6 @@
 
     <div id="hint">
       3Dビュー: ドラッグで回転 / ホイールでズーム<br>
-      偏光板を回すと入射偏光の向きが変わり、<br>
-      板を出た光の楕円形状が変化します。<br><br>
       光路差 Γ は板の厚みで決まる固定値なので、<br>
       波長を変えると δ = 2π·Γ/λ が変化します<br>
       （λ/4 板が λ/4 なのは設計波長のときだけ）。
@@ -201,7 +221,8 @@
   </div>
 
   <div id="view">
-    <canvas></canvas>
+    <canvas id="gl"></canvas>
+    <canvas id="polar"></canvas>
     <span id="caption">3Dビュー（ドラッグで回転・ホイールでズーム）</span>
   </div>
 

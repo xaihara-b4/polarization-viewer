@@ -414,6 +414,8 @@ function updateStatus() {
 
 // ---------- 波の更新（毎フレーム）----------
 const _u = new THREE.Vector3();
+// 出口面 X_OUT での電場（極座標図が参照する）
+let exitFieldY = 0, exitFieldZ = 0;
 
 function updateWaves(t) {
   const { Ef, Es } = amps();
@@ -500,6 +502,8 @@ function updateWaves(t) {
   combGuide.computeLineDistances();               // 破線の長さを毎フレーム計算し直す
   combGuide.visible = Math.abs(yfE) > 0.02 && Math.abs(zsE) > 0.02;
 
+  exitFieldY = yfE; exitFieldZ = zsE;             // 極座標図へ渡す
+
   // スクリーン上の回転ベクトル: ψ = k·X_SCREEN − ωt
   const psi = K * X_SCREEN - OMEGA * t;
   const ey = Ef * Math.cos(psi), ez = Es * Math.cos(psi - stateP.delta);
@@ -510,10 +514,139 @@ function updateWaves(t) {
   }
 }
 
+// ---------- 出口面の極座標図（3Dビュー左下の 2D インセット）----------
+// 波長板の出口面を「受光側から見た向き」で真正面から描く（右 = 進相軸 +Y、上 = 遅相軸 +Z）。
+// 目盛りは主 10°・補助 5°、30° ごとに数値。0° に合わせる軸は UI で切り替える。
+// 角度は「上向きから時計回り」が正 ＝ φ の増える向きと一致（受光側から見た向き）。
+const polarCanvas = document.getElementById('polar');
+const pctx = polarCanvas.getContext('2d');
+const polarState = { show: true, ref: 'slow' };   // ref: 'slow'（遅相軸）| 'trans'（透過軸）
+
+const CSS_FAST = '#36d1c4', CSS_SLOW = '#ff9d3c', CSS_TRANS = '#ffe27a';
+const CSS_GRID = '#39414f', CSS_TICK = '#7d8798', CSS_TEXT = '#9aa4b2';
+
+// 0°（上向き）に合わせる軸の、遅相軸から測った角度
+function polarRefAngle() {
+  return polarState.ref === 'trans' ? stateP.phi : 0;
+}
+
+function drawPolar() {
+  const w = polarCanvas.clientWidth, h = polarCanvas.clientHeight;
+  if (w < 40 || h < 40) return;
+  const dpr = window.devicePixelRatio || 1;
+  const pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+  if (polarCanvas.width !== pw || polarCanvas.height !== ph) {
+    polarCanvas.width = pw; polarCanvas.height = ph;
+  }
+  pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  pctx.clearRect(0, 0, w, h);
+
+  const cx = w / 2, cy = h / 2 + 7;
+  const R = Math.min(w, h) / 2 - 26;      // 目盛り円の半径
+  const S = (R - 15) / A;                 // 世界座標 → px
+  const ref = polarRefAngle();
+
+  // 目盛りの角度 θ（上向きから時計回り）→ 画面座標
+  const scalePx = (theta, r) => [cx + r * Math.sin(theta), cy - r * Math.cos(theta)];
+  // 出口面の電場成分 (y, z) → 画面座標（基準軸ぶんだけ回す）
+  const toPx = (y, z) => scalePx(Math.atan2(y, z) - ref, Math.hypot(y, z) * S);
+  // 遅相軸から測った角度 angle の方向 → 画面座標
+  const dirPx = (angle, r) => scalePx(angle - ref, r);
+
+  const line = (p, q, color, width = 1, dash = null) => {
+    pctx.save();
+    pctx.strokeStyle = color; pctx.lineWidth = width;
+    if (dash) pctx.setLineDash(dash);
+    pctx.beginPath(); pctx.moveTo(p[0], p[1]); pctx.lineTo(q[0], q[1]); pctx.stroke();
+    pctx.restore();
+  };
+
+  // 同心円（振幅の目安）
+  pctx.save();
+  pctx.strokeStyle = CSS_GRID; pctx.lineWidth = 1; pctx.setLineDash([2, 3]);
+  for (const f of [0.25, 0.5, 0.75]) {
+    pctx.beginPath(); pctx.arc(cx, cy, A * f * S, 0, 2 * Math.PI); pctx.stroke();
+  }
+  pctx.restore();
+
+  // 目盛り円
+  pctx.strokeStyle = CSS_TICK; pctx.lineWidth = 1;
+  pctx.beginPath(); pctx.arc(cx, cy, R, 0, 2 * Math.PI); pctx.stroke();
+
+  // 目盛り: 補助 5°（短い）／主 10°（長い）／30° は数値付き
+  pctx.font = '9px "Hiragino Sans","Noto Sans JP",sans-serif';
+  pctx.textAlign = 'center'; pctx.textBaseline = 'middle';
+  for (let deg = 0; deg < 360; deg += 5) {
+    const theta = THREE.MathUtils.degToRad(deg);
+    const labeled = deg % 30 === 0;
+    const major = deg % 10 === 0;
+    const len = labeled ? 9 : major ? 7 : 3.5;
+    line(scalePx(theta, R), scalePx(theta, R - len),
+      labeled ? '#c7cedb' : CSS_TICK, major ? 1.2 : 1);
+    if (labeled) {
+      const [lx, ly] = scalePx(theta, R - 17);
+      pctx.fillStyle = deg === 0 ? '#e6e9ef' : CSS_TEXT;
+      pctx.fillText(String(deg), lx, ly);
+    }
+  }
+
+  // 軸（遅相 = 0°、進相 = 90°、透過軸 = φ）
+  const axis = (angle, color, dash) =>
+    line(dirPx(angle, R - 12), dirPx(angle + Math.PI, R - 12), color, 1.2, dash);
+  axis(0, CSS_SLOW);                       // 遅相軸
+  axis(Math.PI / 2, CSS_FAST);             // 進相軸
+  axis(stateP.phi, CSS_TRANS, [4, 3]);     // 偏光板の透過軸
+
+  // 出口面の楕円（＝合成波の軌跡）
+  const { Ef, Es } = amps();
+  const col = wavelengthToColor(stateP.lambda);
+  pctx.strokeStyle = col; pctx.lineWidth = 1.6;
+  pctx.beginPath();
+  for (let i = 0; i <= N_ELL; i++) {
+    const psi = (i / N_ELL) * 2 * Math.PI;
+    const [x, y] = toPx(Ef * Math.cos(psi), Es * Math.cos(psi - stateP.delta));
+    i ? pctx.lineTo(x, y) : pctx.moveTo(x, y);
+  }
+  pctx.closePath(); pctx.stroke();
+
+  // 現在の電場ベクトルと2成分（3Dの出口面と同じ平行四辺形）
+  const c = [cx, cy];
+  const pf = toPx(exitFieldY, 0), ps = toPx(0, exitFieldZ);
+  const pe = toPx(exitFieldY, exitFieldZ);
+  line(c, pf, CSS_FAST, 1.4);
+  line(c, ps, CSS_SLOW, 1.4);
+  line(pf, pe, CSS_SLOW, 1, [3, 3]);
+  line(ps, pe, CSS_FAST, 1, [3, 3]);
+  line(c, pe, col, 2.2);
+  // 合成ベクトルの矢じり
+  const ang = Math.atan2(pe[1] - cy, pe[0] - cx);
+  if (Math.hypot(pe[0] - cx, pe[1] - cy) > 4) {
+    pctx.fillStyle = col;
+    pctx.beginPath();
+    pctx.moveTo(pe[0], pe[1]);
+    pctx.lineTo(pe[0] - 8 * Math.cos(ang - 0.4), pe[1] - 8 * Math.sin(ang - 0.4));
+    pctx.lineTo(pe[0] - 8 * Math.cos(ang + 0.4), pe[1] - 8 * Math.sin(ang + 0.4));
+    pctx.closePath(); pctx.fill();
+  }
+  pctx.fillStyle = '#c7cedb';
+  pctx.beginPath(); pctx.arc(cx, cy, 2, 0, 2 * Math.PI); pctx.fill();
+
+  // 見出し（上）と基準の説明（下）
+  pctx.textAlign = 'left'; pctx.textBaseline = 'middle';
+  pctx.font = '10px "Hiragino Sans","Noto Sans JP",sans-serif';
+  pctx.fillStyle = CSS_TEXT;
+  pctx.fillText('波長板 出口面（受光側から見て）', 9, 12);
+  pctx.fillStyle = polarState.ref === 'trans' ? CSS_TRANS : CSS_SLOW;
+  pctx.fillText(polarState.ref === 'trans' ? '0° = 透過軸' : '0° = 遅相軸', 9, h - 11);
+  pctx.textAlign = 'right';
+  pctx.fillStyle = CSS_TEXT;
+  pctx.fillText('目盛 10°（補助 5°）', w - 9, h - 11);
+}
+
 // ---------- カメラ・レンダラ ----------
 const viewEl = document.getElementById('view');
 const renderer = new THREE.WebGLRenderer({
-  canvas: viewEl.querySelector('canvas'), antialias: true });
+  canvas: document.getElementById('gl'), antialias: true });
 
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
 camera.up.set(0, 0, 1);
@@ -622,6 +755,7 @@ function render(now) {
       if (!userAdjusted) frameScene();     // 表示エリアの大きさに合わせて収め直す
     }
     renderer.render(scene, camera);
+    if (polarState.show) drawPolar();
   }
   requestAnimationFrame(render);
 }
@@ -637,6 +771,8 @@ const speedValEl = document.getElementById('speedVal');
 const lambdaEl = document.getElementById('lambda');
 const lambdaValEl = document.getElementById('lambdaVal');
 const exitTraceEl = document.getElementById('exitTrace');
+const polarShowEl = document.getElementById('polarShow');
+const polarRefBtns = document.getElementById('polarRefBtns');
 const playBtn = document.getElementById('playBtn');
 const stepBackBtn = document.getElementById('stepBack');
 const stepFwdBtn = document.getElementById('stepFwd');
@@ -666,6 +802,25 @@ exitTraceEl.addEventListener('change', () => {
   exitEllipse.visible = exitTraceEl.checked;
 });
 exitEllipse.visible = exitTraceEl.checked;   // リロード時のチェック状態に合わせる
+
+// 極座標図の表示切替と、0° 基準（遅相軸／透過軸）の切替
+polarShowEl.addEventListener('change', () => {
+  polarState.show = polarShowEl.checked;
+  polarCanvas.style.display = polarState.show ? 'block' : 'none';
+});
+polarRefBtns.querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    polarState.ref = btn.dataset.ref;
+    syncPolarRefButtons();
+  });
+});
+function syncPolarRefButtons() {
+  polarRefBtns.querySelectorAll('button').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.ref === polarState.ref));
+}
+polarState.show = polarShowEl.checked;
+polarCanvas.style.display = polarState.show ? 'block' : 'none';
+syncPolarRefButtons();
 
 playBtn.addEventListener('click', () => {
   stateP.playing = !stateP.playing;
