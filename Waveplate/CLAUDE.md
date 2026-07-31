@@ -27,9 +27,7 @@ Three.js は CDN（importmap 経由）で読み込むため、**実行時にイ�
 ## アーキテクチャ
 
 - **`index.html`** — UI レイアウト。左に操作パネル、右に3Dビュー（`#gl` = WebGL、`#polar` = 左下の
-  2D 極座標図）。importmap で Three.js を指定。
-  パネル先頭の `.appnav` は姉妹アプリ（`../PoincareSphere/` / `../MOA/`）への切り替えリンク
-  （公開サイト `_site/` 配下でのみ有効。単体で `server.js` を起動したときは 404 になる）
+  2D 極座標図）。importmap で Three.js を指定
 - **`main.js`** — アプリ本体（ES Module、単一ファイル）
   - `rebuildStatic()`: φ / δ / λ 変更時に走る。透過軸バーの角度・波の色・スクリーンの楕円リング・
     状態テキストを更新
