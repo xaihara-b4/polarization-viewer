@@ -1,0 +1,9 @@
+{
+  "name": "moa-orientation-3d",
+  "version": "1.0.0",
+  "description": "分子配向計の3D共振曲線（f×θ）と配向パターン（f=fm断面）の関係を可視化するWebアプリ",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT"
+}

@@ -24,6 +24,22 @@
     border-right: 1px solid #2c313a;
     overflow-y: auto;
   }
+  /* ---- アプリ切り替えナビ（GitHub Pages で 3 アプリを行き来する） ---- */
+  .appnav { display: flex; gap: 4px; margin-bottom: 12px; }
+  .appnav a {
+    flex: 1;
+    text-align: center;
+    padding: 5px 2px;
+    font-size: 11px;
+    color: #9aa4b2;
+    text-decoration: none;
+    border: 1px solid #2c313a;
+    border-radius: 4px;
+    background: #171b21;
+  }
+  .appnav a:hover { border-color: #8ecbff; color: #cdd3dc; }
+  .appnav a.current { border-color: #8ecbff; background: #24303f; color: #8ecbff; cursor: default; }
+
   #panel h1 {
     font-size: 16px;
     margin-bottom: 14px;
@@ -160,6 +176,11 @@
 </head>
 <body>
   <div id="panel">
+    <nav class="appnav">
+      <a href="../Waveplate/">波長板</a>
+      <a class="current" href="./">ポアンカレ球</a>
+      <a href="../MOA/">分子配向計</a>
+    </nav>
     <h1>ポアンカレ球ビューア</h1>
 
     <fieldset>

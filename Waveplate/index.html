@@ -24,6 +24,22 @@
     border-right: 1px solid #2c313a;
     overflow-y: auto;
   }
+  /* ---- アプリ切り替えナビ（GitHub Pages で 3 アプリを行き来する） ---- */
+  .appnav { display: flex; gap: 4px; margin-bottom: 12px; }
+  .appnav a {
+    flex: 1;
+    text-align: center;
+    padding: 5px 2px;
+    font-size: 11px;
+    color: #9aa4b2;
+    text-decoration: none;
+    border: 1px solid #2c313a;
+    border-radius: 4px;
+    background: #171b21;
+  }
+  .appnav a:hover { border-color: #8ecbff; color: #cdd3dc; }
+  .appnav a.current { border-color: #8ecbff; background: #24303f; color: #8ecbff; cursor: default; }
+
   #panel h1 {
     font-size: 16px;
     margin-bottom: 4px;
@@ -47,6 +63,18 @@
     gap: 8px;
   }
   .row label { font-size: 12px; flex: none; }
+  .note { font-size: 11px; color: #8ecbff; text-align: right; margin: -2px 0 2px; line-height: 1.5; }
+
+  /* ---- チェックボックス ---- */
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    margin: 4px 0 8px;
+    cursor: pointer;
+  }
+  .check input { accent-color: #8ecbff; cursor: pointer; }
   .row .val { font-size: 12px; color: #8ecbff; width: 64px; text-align: right; flex: none; }
   input[type="range"] { flex: 1; min-width: 0; accent-color: #8ecbff; }
 
@@ -97,17 +125,29 @@
     position: relative;
     min-width: 0;
   }
-  #view canvas {
+  #gl {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     display: block;
   }
+  /* 左下の極座標図（出口面を真正面から見た図） */
+  #polar {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    width: min(248px, 34vw);
+    height: min(248px, 34vw);
+    background: rgba(20, 23, 28, 0.78);
+    border: 1px solid #2c313a;
+    border-radius: 8px;
+    pointer-events: none;
+  }
   #caption {
     position: absolute;
     top: 8px;
-    left: 10px;
+    right: 10px;
     font-size: 11px;
     color: #9aa4b2;
     background: rgba(20, 23, 28, 0.7);
@@ -119,6 +159,11 @@
 </head>
 <body>
   <div id="panel">
+    <nav class="appnav">
+      <a class="current" href="./">波長板</a>
+      <a href="../PoincareSphere/">ポアンカレ球</a>
+      <a href="../MOA/">分子配向計</a>
+    </nav>
     <h1>波長板・楕円偏光 3D</h1>
     <div class="sub">直線偏光 → 波長板で進相/遅相軸に分解 → 位相差 δ → 楕円偏光</div>
 
@@ -129,25 +174,51 @@
         <input id="phi" type="range" min="0" max="180" step="1" value="45">
         <span class="val" id="phiVal">45°</span>
       </div>
+      <div class="note">φ = 0° は遅相軸（縦）。光の進む向きを<br>後ろから見て左回り（反時計回り）がプラス</div>
     </fieldset>
 
     <fieldset>
-      <legend>波長板（位相差 δ）</legend>
+      <legend>波長板（光路差 Γ）</legend>
       <div class="btns" id="deltaBtns">
-        <button data-delta="90">λ/4 板</button>
-        <button data-delta="180">λ/2 板</button>
-        <button data-delta="360">λ 板</button>
+        <button data-frac="0.25">λ/4 板</button>
+        <button data-frac="0.5">λ/2 板</button>
+        <button data-frac="1">λ 板</button>
       </div>
       <div class="row">
-        <label for="delta">δ</label>
-        <input id="delta" type="range" min="0" max="360" step="1" value="90">
-        <span class="val" id="deltaVal">90°</span>
+        <label for="retard">光路差 Γ</label>
+        <input id="retard" type="range" min="0" max="800" step="1" value="133">
+        <span class="val" id="retardVal">133nm</span>
       </div>
+      <div class="note" id="deltaInfo"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>表示</legend>
+      <label class="check">
+        <input type="checkbox" id="exitTrace" checked>
+        波長板出口の合成波の軌跡（楕円）
+      </label>
+      <div class="note">受光板と同じ楕円を出口面にも描きます</div>
+
+      <label class="check">
+        <input type="checkbox" id="polarShow" checked>
+        出口面の極座標図（3Dビュー左下）
+      </label>
+      <div class="btns" id="polarRefBtns">
+        <button data-ref="slow">0° = 遅相軸</button>
+        <button data-ref="trans">0° = 透過軸</button>
+      </div>
+      <div class="note">極座標図の上向き（0°）をどちらの軸に<br>合わせるかを選びます</div>
     </fieldset>
 
     <fieldset>
       <legend>アニメーション</legend>
       <button id="playBtn">⏸ 一時停止</button>
+      <div class="btns" id="stepBtns">
+        <button id="stepBack" title="1/24 周期ぶん戻す">◀ コマ戻し</button>
+        <button id="stepFwd" title="1/24 周期ぶん進める">コマ送り ▶</button>
+      </div>
+      <div class="note">コマ送りは 1/24 周期（位相 15°）ずつ。<br>再生中に押すと一時停止します</div>
       <div class="row">
         <label for="speed">速度</label>
         <input id="speed" type="range" min="0" max="3" step="0.05" value="1">
@@ -164,13 +235,15 @@
 
     <div id="hint">
       3Dビュー: ドラッグで回転 / ホイールでズーム<br>
-      偏光板を回すと入射偏光の向きが変わり、<br>
-      板を出た光の楕円形状が変化します。
+      光路差 Γ は板の厚みで決まる固定値なので、<br>
+      波長を変えると δ = 2π·Γ/λ が変化します<br>
+      （λ/4 板が λ/4 なのは設計波長のときだけ）。
     </div>
   </div>
 
   <div id="view">
-    <canvas></canvas>
+    <canvas id="gl"></canvas>
+    <canvas id="polar"></canvas>
     <span id="caption">3Dビュー（ドラッグで回転・ホイールでズーム）</span>
   </div>
 

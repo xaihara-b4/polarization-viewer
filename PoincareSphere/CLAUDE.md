@@ -29,7 +29,9 @@ Three.js は CDN（importmap 経由）で読み込むため、**実行時にイ�
 
 ## アーキテクチャ
 
-- **`index.html`** — UI レイアウト。左に入力パネル、右に 4 ビューのグリッド。importmap で Three.js を指定
+- **`index.html`** — UI レイアウト。左に入力パネル、右に 4 ビューのグリッド。importmap で Three.js を指定。
+  パネル先頭の `.appnav` は姉妹アプリ（`../Waveplate/` / `../MOA/`）への切り替えリンク
+  （公開サイト `_site/` 配下でのみ有効。単体で `server.js` を起動したときは 404 になる）
 - **`main.js`** — アプリ本体（ES Module、単一ファイル）
   - ストークスベクトルの正規化・位相差板の回転計算（Rodrigues の回転公式）
   - Three.js シーン（球・軸・点・軌跡）は 1 つを共有し、**ビューごとに独立した canvas +

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分子配向計 3D ↔ 配向パターン</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
+    background: #14171c;
+    color: #e6e9ef;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ---- 入力パネル ---- */
+  #panel {
+    width: 306px;
+    flex: none;
+    padding: 16px;
+    background: #1c2027;
+    border-right: 1px solid #2c313a;
+    overflow-y: auto;
+  }
+  /* ---- アプリ切り替えナビ（GitHub Pages で 3 アプリを行き来する） ---- */
+  .appnav { display: flex; gap: 4px; margin-bottom: 12px; }
+  .appnav a {
+    flex: 1;
+    text-align: center;
+    padding: 5px 2px;
+    font-size: 11px;
+    color: #9aa4b2;
+    text-decoration: none;
+    border: 1px solid #2c313a;
+    border-radius: 4px;
+    background: #171b21;
+  }
+  .appnav a:hover { border-color: #8ecbff; color: #cdd3dc; }
+  .appnav a.current { border-color: #8ecbff; background: #24303f; color: #8ecbff; cursor: default; }
+
+  #panel h1 { font-size: 15px; margin-bottom: 4px; color: #8ecbff; }
+  #panel .sub { font-size: 11px; color: #6d7684; margin-bottom: 14px; line-height: 1.6; }
+
+  fieldset {
+    border: 1px solid #2c313a;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+  }
+  legend { font-size: 12px; color: #9aa4b2; padding: 0 6px; }
+
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 10px 0;
+    gap: 8px;
+  }
+  .row label { font-size: 12px; flex: none; }
+  .row .val { font-size: 12px; color: #8ecbff; width: 74px; text-align: right; flex: none; }
+  input[type="range"] { flex: 1; min-width: 0; accent-color: #8ecbff; }
+  .note { font-size: 11px; color: #8ecbff; text-align: right; margin: -2px 0 2px; line-height: 1.5; }
+  .note.left { text-align: left; margin-top: 4px; }
+  .note b { font-weight: bold; }
+
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    margin: 6px 0;
+    cursor: pointer;
+  }
+  .check input { accent-color: #8ecbff; cursor: pointer; }
+
+  .btns { display: flex; gap: 6px; margin: 8px 0 4px; }
+  .btns button {
+    flex: 1;
+    padding: 6px 4px;
+    border: 1px solid #3a4150;
+    border-radius: 4px;
+    background: none;
+    color: #cdd3dc;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .btns button:hover { border-color: #8ecbff; }
+  .btns button.active { border-color: #8ecbff; background: #24303f; color: #8ecbff; }
+
+  .wide {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #3a4150;
+    border-radius: 4px;
+    background: none;
+    color: #36d1c4;
+    font-size: 13px;
+    cursor: pointer;
+    margin-bottom: 6px;
+  }
+  .wide:hover { border-color: #36d1c4; }
+  #playBtn { color: #8ecbff; }
+  #playBtn:hover { border-color: #8ecbff; }
+
+  #status {
+    font-size: 12px;
+    line-height: 1.7;
+    background: #14171c;
+    border: 1px solid #2c313a;
+    border-radius: 6px;
+    padding: 10px 12px;
+    white-space: pre-line;
+  }
+  #hint { font-size: 11px; color: #6d7684; margin-top: 12px; line-height: 1.7; }
+  #hint b { color: #9aa4b2; font-weight: normal; }
+
+  /* ---- 表示エリア ---- */
+  #stage {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
+    gap: 8px;
+    padding: 8px;
+  }
+  .card {
+    position: relative;
+    border: 1px solid #2c313a;
+    border-radius: 6px;
+    background: #171b21;
+    overflow: hidden;
+    min-width: 0;
+    min-height: 0;
+  }
+  .card canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  #view3d { grid-row: 1 / span 2; background: #14171c; }
+  #side {
+    display: grid;
+    grid-template-rows: minmax(0, 1.12fr) minmax(0, 1fr);
+    gap: 8px;
+    min-height: 0;
+  }
+  .caption {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    right: 8px;
+    font-size: 11px;
+    color: #9aa4b2;
+    background: rgba(20, 23, 28, 0.72);
+    padding: 3px 7px;
+    border-radius: 3px;
+    pointer-events: none;
+    line-height: 1.5;
+  }
+  .caption b { color: #36d1c4; font-weight: normal; }
+  .caption i { color: #ffd166; font-style: normal; }
+
+  @media (max-width: 880px) {
+    body { flex-direction: column; overflow: auto; }
+    #panel { width: 100%; border-right: none; border-bottom: 1px solid #2c313a; }
+    #stage { grid-template-columns: 1fr; height: 150vh; }
+    #view3d { grid-row: auto; min-height: 50vh; }
+  }
+</style>
+</head>
+<body>
+  <div id="panel">
+    <nav class="appnav">
+      <a href="../Waveplate/">波長板</a>
+      <a href="../PoincareSphere/">ポアンカレ球</a>
+      <a class="current" href="./">分子配向計</a>
+    </nav>
+    <h1>分子配向計 3D ↔ 配向パターン</h1>
+    <div class="sub">
+      試料 1 回転中の共振曲線（周波数 f × 回転角 θ）の 3D 面を、<br>
+      測定周波数 <b>f = f<sub>m</sub></b> で切った断面が「配向パターン」になります。
+    </div>
+
+    <fieldset>
+      <legend>試料（配向）</legend>
+      <div class="row">
+        <label for="phi0">配向角 φ₀</label>
+        <input id="phi0" type="range" min="0" max="180" step="1" value="30">
+        <span class="val" id="phi0Val">30°</span>
+      </div>
+      <div class="row">
+        <label for="dEps">誘電率異方性 Δε′</label>
+        <input id="dEps" type="range" min="0" max="1" step="0.01" value="0.30">
+        <span class="val" id="dEpsVal">0.30</span>
+      </div>
+      <div class="note">Δε′ = ε′<sub>max</sub> − ε′<sub>min</sub>。配向が強いほど大きい</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>空洞共振器・測定周波数</legend>
+      <div class="row">
+        <label for="q">Q 値</label>
+        <input id="q" type="range" min="800" max="6000" step="50" value="2000">
+        <span class="val" id="qVal">2000</span>
+      </div>
+      <div class="row">
+        <label>測定周波数 f<sub>m</sub> [MHz]</label>
+        <span class="val" id="fmVal">4001.45</span>
+      </div>
+      <div class="note left">
+        f<sub>m</sub> は自動設定：1回転中で<b>共振周波数が最も高くなる θ</b>
+        （= φ₀+90°、ε′ が最小の向き）のピークをとり、その
+        <b>高周波側の半値（高さ 1/2）の周波数</b>を f<sub>m</sub> とします。
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>断面 → 配向パターン</legend>
+      <button class="wide" id="wrapBtn">▶ 断面を極座標へ巻き取る</button>
+      <div class="row">
+        <label for="morph">巻き取り</label>
+        <input id="morph" type="range" min="0" max="100" step="1" value="0">
+        <span class="val" id="morphVal">0%</span>
+      </div>
+      <div class="btns" id="viewBtns">
+        <button data-view="obl" class="active">斜め視点</button>
+        <button data-view="front">正面（f 軸から）</button>
+      </div>
+      <label class="check"><input type="checkbox" id="showPlane" checked> f = f<sub>m</sub> の断面プレーン</label>
+      <label class="check"><input type="checkbox" id="showCut" checked> 断面の強度カーブ（交線）</label>
+      <label class="check"><input type="checkbox" id="showSurf" checked> 面を塗る（陰線処理）</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>試料の回転</legend>
+      <button class="wide" id="playBtn">⏸ 一時停止</button>
+      <div class="btns" id="stepBtns">
+        <button id="stepBack">◀ 10°戻す</button>
+        <button id="stepFwd">10°進める ▶</button>
+      </div>
+      <div class="row">
+        <label for="theta">回転角 θ</label>
+        <input id="theta" type="range" min="0" max="360" step="1" value="0">
+        <span class="val" id="thetaVal">0°</span>
+      </div>
+      <div class="row">
+        <label for="speed">速度</label>
+        <input id="speed" type="range" min="0" max="3" step="0.05" value="1">
+        <span class="val" id="speedVal">1.0×</span>
+      </div>
+    </fieldset>
+
+    <div id="status"></div>
+
+    <div id="hint">
+      <b>3Dビュー</b>: ドラッグで回転 / ホイールでズーム<br>
+      <b>物理</b>: 試料を入れると共振周波数が下がる（摂動法）。<br>
+      電界方向の誘電率 ε′(θ) が大きいほど下がるので、<br>
+      共振曲線のピークが θ とともに左右に揺れます。<br>
+      f<sub>m</sub> を固定して測った強度 I(θ) が配向パターン。<br>
+      f<sub>m</sub> は全ピークより高周波側にあるので、ε′ が<br>
+      小さい向き（配向と直交）ほど強度が大きくなります。<br>
+      よって<b>配向角 = パターン長軸 + 90°</b>、MOR = max/min。
+    </div>
+  </div>
+
+  <div id="stage">
+    <div class="card" id="view3d">
+      <canvas id="gl"></canvas>
+      <span class="caption">試料1回転中の共振曲線の変化（f × θ × 透過マイクロ波強度）／<i>黄</i> = 現在の θ、<b>シアン</b> = f<sub>m</sub> 断面</span>
+    </div>
+    <div id="side">
+      <div class="card" id="polarCard">
+        <canvas id="polar"></canvas>
+        <span class="caption">配向パターン ← <b>f = f<sub>m</sub> の断面</b>を極座標に巻き取ったもの</span>
+      </div>
+      <div class="card" id="curveCard">
+        <canvas id="curve"></canvas>
+        <span class="caption">共振曲線（<i>現在の θ</i>）と測定周波数 f<sub>m</sub></span>
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
