@@ -283,17 +283,17 @@ for (const frac of [0.25, 0.5, 0.75, 1.0]) {
 for (let a = 0; a < 180; a += 30) {
   const r = POLAR_R, rad = a * DEG;
   const l = lineFromPoints([
-    new THREE.Vector3(0, POLAR_CY + r * Math.cos(rad), POLAR_CZ - r * Math.sin(rad)),
-    new THREE.Vector3(0, POLAR_CY - r * Math.cos(rad), POLAR_CZ + r * Math.sin(rad)),
+    new THREE.Vector3(0, POLAR_CY + r * Math.cos(rad), POLAR_CZ + r * Math.sin(rad)),
+    new THREE.Vector3(0, POLAR_CY - r * Math.cos(rad), POLAR_CZ - r * Math.sin(rad)),
   ], COL_AXIS, 0);
   polarGridMats.push(l.material);
   polarGrid.add(l);
 }
-// 巻き取り後の角度目盛り（右上のグラフと同じ 0° 上・時計回り）
+// 巻き取り後の角度目盛り（右上のグラフと同じ 0° 上・反時計回りが正）
 for (const a of [0, 90, 180, 270]) {
   const rad = a * DEG, r = POLAR_R + 0.45;
   const s = makeTextSprite(`${a}°`, '#8a94a3', 0.32);
-  s.position.set(0, POLAR_CY + r * Math.cos(rad), POLAR_CZ - r * Math.sin(rad));
+  s.position.set(0, POLAR_CY + r * Math.cos(rad), POLAR_CZ + r * Math.sin(rad));
   s.material.opacity = 0;
   polarGridMats.push(s.material);
   polarGrid.add(s);
@@ -372,10 +372,10 @@ function updateCut() {
     const th = cutTheta[k], I = cutI[k];
     // A: 直交（3D の断面そのもの）
     const ay = yOfI(I), az = zOfTheta(th);
-    // B: 極座標（0° が上、時計回りが正 ＝ 右上のグラフと同じ向き）
+    // B: 極座標（0° が上、反時計回りが正 ＝ 右上のグラフと同じ向き）
     const r = POLAR_R * (I / norm), rad = th * DEG;
     const by = POLAR_CY + r * Math.cos(rad);
-    const bz = POLAR_CZ - r * Math.sin(rad);
+    const bz = POLAR_CZ + r * Math.sin(rad);
     const y = ay + (by - ay) * m, z = az + (bz - az) * m;
     pos[k * 3] = xfm; pos[k * 3 + 1] = y; pos[k * 3 + 2] = z;
     // 塗りの下辺: 直交では底面（強度 0）、極座標では中心へ寄せる
@@ -426,7 +426,7 @@ function updateCurrent() {
   const norm = cutStat.max > 1e-9 ? cutStat.max : 1;
   const ay = yOfI(I), az = z;
   const r = POLAR_R * (I / norm), rad = th * DEG;
-  const by = POLAR_CY + r * Math.cos(rad), bz = POLAR_CZ - r * Math.sin(rad);
+  const by = POLAR_CY + r * Math.cos(rad), bz = POLAR_CZ + r * Math.sin(rad);
   marker.position.set(xOfF(st.fm), ay + (by - ay) * st.morph, az + (bz - az) * st.morph);
 }
 
@@ -465,9 +465,9 @@ function fitCanvas(cv) {
   return { ctx, w, h };
 }
 
-// 0° を上、時計回りを正（配向計の表示と同じ向き）
+// 0° を上、反時計回り（左回り）を正 ＝ 配向計の角度規約
 const polarXY = (cx, cy, r, deg) =>
-  [cx + r * Math.sin(deg * DEG), cy - r * Math.cos(deg * DEG)];
+  [cx - r * Math.sin(deg * DEG), cy - r * Math.cos(deg * DEG)];
 
 function drawPolar() {
   const c = fitCanvas(polarCv);
