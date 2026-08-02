@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>平行ニコル 3波長で次数を決める</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
+    background: #14171c;
+    color: #e6e9ef;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ---- 入力パネル ---- */
+  #panel {
+    width: 306px;
+    flex: none;
+    padding: 16px;
+    background: #1c2027;
+    border-right: 1px solid #2c313a;
+    overflow-y: auto;
+  }
+  /* ---- アプリ切り替えナビ（GitHub Pages で 4 アプリを行き来する） ---- */
+  .appnav { display: flex; gap: 4px; margin-bottom: 12px; }
+  .appnav a {
+    flex: 1;
+    text-align: center;
+    padding: 5px 2px;
+    font-size: 11px;
+    color: #9aa4b2;
+    text-decoration: none;
+    border: 1px solid #2c313a;
+    border-radius: 4px;
+    background: #171b21;
+  }
+  .appnav a:hover { border-color: #8ecbff; color: #cdd3dc; }
+  .appnav a.current { border-color: #8ecbff; background: #24303f; color: #8ecbff; cursor: default; }
+
+  #panel h1 { font-size: 15px; margin-bottom: 4px; color: #8ecbff; }
+  #panel .sub { font-size: 11px; color: #6d7684; margin-bottom: 14px; line-height: 1.6; }
+
+  fieldset {
+    border: 1px solid #2c313a;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+  }
+  legend { font-size: 12px; color: #9aa4b2; padding: 0 6px; }
+
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 10px 0;
+    gap: 8px;
+  }
+  .row label { font-size: 12px; flex: none; }
+  .row .val { font-size: 12px; color: #8ecbff; width: 78px; text-align: right; flex: none; }
+  input[type="range"] { flex: 1; min-width: 0; accent-color: #8ecbff; }
+  input[type="number"] {
+    width: 78px; flex: none; padding: 4px 6px; font-size: 12px;
+    background: #14171c; color: #8ecbff;
+    border: 1px solid #3a4150; border-radius: 4px;
+  }
+  .note { font-size: 11px; color: #8ecbff; text-align: right; margin: -2px 0 2px; line-height: 1.5; }
+  .note.left { text-align: left; margin-top: 4px; }
+  .note.warn { color: #ffd166; }
+  .note b { font-weight: bold; }
+
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    margin: 6px 0;
+    cursor: pointer;
+  }
+  .check input { accent-color: #8ecbff; cursor: pointer; }
+  /* 波長チェックは各波長の色で見出しを出す */
+  .check .sw { display: inline-block; width: 22px; height: 3px; border-radius: 2px; }
+
+  .btns { display: flex; gap: 6px; margin: 8px 0 4px; }
+  .btns button {
+    flex: 1;
+    padding: 6px 4px;
+    border: 1px solid #3a4150;
+    border-radius: 4px;
+    background: none;
+    color: #cdd3dc;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .btns button:hover { border-color: #8ecbff; }
+  .btns button.active { border-color: #8ecbff; background: #24303f; color: #8ecbff; }
+
+  .wide {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #3a4150;
+    border-radius: 4px;
+    background: none;
+    color: #36d1c4;
+    font-size: 13px;
+    cursor: pointer;
+    margin-bottom: 6px;
+  }
+  .wide:hover { border-color: #36d1c4; }
+  #playBtn { color: #8ecbff; }
+  #playBtn:hover { border-color: #8ecbff; }
+
+  /* 位相円（次数 = 巻き数） */
+  #phasorBox {
+    position: relative;
+    width: 100%;
+    height: 168px;
+    border: 1px solid #2c313a;
+    border-radius: 6px;
+    background: #14171c;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  #phasorBox canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  #status {
+    font-size: 12px;
+    line-height: 1.7;
+    background: #14171c;
+    border: 1px solid #2c313a;
+    border-radius: 6px;
+    padding: 10px 12px;
+    white-space: pre-line;
+  }
+  #hint { font-size: 11px; color: #6d7684; margin-top: 12px; line-height: 1.7; }
+  #hint b { color: #9aa4b2; font-weight: normal; }
+
+  /* ---- 表示エリア ---- */
+  #stage {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1.15fr) minmax(0, 1.05fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
+    gap: 8px;
+    padding: 8px;
+  }
+  /* 極座標グラフは 3 波長を横並びの別カードにする（重ね書きしない） */
+  #polarWrap {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 4px;
+    min-height: 0;
+  }
+  #polarRow {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    min-height: 0;
+  }
+  .rowcap {
+    font-size: 11px;
+    color: #9aa4b2;
+    line-height: 1.5;
+    padding-left: 2px;
+  }
+  .rowcap b { color: #36d1c4; font-weight: normal; }
+  .rowcap i { color: #8ecbff; font-style: normal; }
+  .card {
+    position: relative;
+    border: 1px solid #2c313a;
+    border-radius: 6px;
+    background: #171b21;
+    overflow: hidden;
+    min-width: 0;
+    min-height: 0;
+  }
+  .card canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .caption {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    right: 8px;
+    font-size: 11px;
+    color: #9aa4b2;
+    background: rgba(20, 23, 28, 0.72);
+    padding: 3px 7px;
+    border-radius: 3px;
+    pointer-events: none;
+    line-height: 1.5;
+  }
+  .caption b { color: #36d1c4; font-weight: normal; }
+  .caption i { color: #8ecbff; font-style: normal; }
+
+  @media (max-width: 880px) {
+    body { flex-direction: column; overflow: auto; }
+    #panel { width: 100%; border-right: none; border-bottom: 1px solid #2c313a; }
+    #stage { height: 150vh; }
+  }
+</style>
+</head>
+<body>
+  <div id="panel">
+    <nav class="appnav">
+      <a href="../Waveplate/">波長板</a>
+      <a href="../PoincareSphere/">ポアンカレ球</a>
+      <a href="../MOA/">分子配向計</a>
+      <a class="current" href="./">平行ニコル</a>
+    </nav>
+    <h1>平行ニコル 3波長で次数を決める</h1>
+    <div class="sub">
+      平行ニコルで測れるのは <b>c = cos(2πR/λ)</b> だけ。<br>
+      1 波長では<b>次数 m</b> が決まらず R が定まりません。<br>
+      590 / 610 / 630 nm の 3 波長で測ると、<br>
+      3 つの候補列がそろう R が 1 つに決まります。
+    </div>
+
+    <fieldset>
+      <legend>試料（測定対象）</legend>
+      <div class="row">
+        <label for="R">真のリタデーション R</label>
+        <input id="Rnum" type="number" min="0" max="3000" step="1" value="1400">
+      </div>
+      <input id="R" type="range" min="0" max="3000" step="0.5" value="1400" style="width:100%">
+      <div class="note">R [nm]（測定者には見えない値）</div>
+      <div class="note left">
+        アプリはこの R から各波長の c を作ります。以下の表示は
+        <b>「c しか見えない測定者」</b>が R を逆算した結果です。
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>測定に使う波長</legend>
+      <label class="check"><input type="checkbox" id="use0" checked>
+        <span class="sw" style="background:#ffd166"></span> 590 nm</label>
+      <label class="check"><input type="checkbox" id="use1" checked>
+        <span class="sw" style="background:#ff8a5c"></span> 610 nm</label>
+      <label class="check"><input type="checkbox" id="use2" checked>
+        <span class="sw" style="background:#ff5c7a"></span> 630 nm</label>
+      <div class="note left">
+        1 本 → 2 本 → 3 本と増やすと候補が絞られます。<br>
+        <b>波長分散は無いものとする</b>（R は波長によらず一定）。
+      </div>
+      <div class="row">
+        <label for="tol">測定誤差の許容幅</label>
+        <input id="tol" type="range" min="0.005" max="0.15" step="0.005" value="0.05">
+        <span class="val" id="tolVal">±0.050</span>
+      </div>
+      <div class="note left">
+        全波長で <b>|Δc| ≤ 許容幅</b> なら候補として残す判定。<br>
+        2 波長だと 0.10 で偽の候補が復活しますが、<br>
+        3 波長なら 0.15 でも 1 本のままです。
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>位相円（次数 = 巻き数）</legend>
+      <div class="btns" id="focusBtns">
+        <button data-lam="0" class="active">590</button>
+        <button data-lam="1">610</button>
+        <button data-lam="2">630</button>
+      </div>
+      <div id="phasorBox"><canvas id="phasor"></canvas></div>
+      <div class="note left">
+        δ = 2πR/λ が単位円を<b>何周したか</b>が次数 m。<br>
+        測定できるのは横軸への射影 c だけなので、<br>
+        巻き数の情報が落ちてしまいます。
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>表示</legend>
+      <div class="btns" id="nicolBtns">
+        <button data-nicol="parallel" class="active">平行ニコル</button>
+        <button data-nicol="crossed">直交ニコル</button>
+      </div>
+      <div class="btns" id="yBtns">
+        <button data-y="c" class="active">c で表示</button>
+        <button data-y="T">透過率 T で表示</button>
+      </div>
+      <label class="check"><input type="checkbox" id="showOrder" checked> 候補コムに次数 m を表示</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>R の掃引</legend>
+      <button class="wide" id="playBtn">▶ 再生</button>
+      <div class="row">
+        <label for="speed">速度</label>
+        <input id="speed" type="range" min="0" max="3" step="0.05" value="1">
+        <span class="val" id="speedVal">1.0×</span>
+      </div>
+    </fieldset>
+
+    <div id="status"></div>
+
+    <div id="hint">
+      <b>読み方</b>: ①の極座標は試料を回したときの<br>
+      透過率 T∥(θ) = 1 − sin²2θ·sin²(δ/2)。<br>
+      0°/90° では複屈折が効かず T = 1、<br>
+      <b>45° でくびれ、その深さが c</b> を表します。<br>
+      ②で c 曲線と測定値の水平線が交わる R が候補。<br>
+      ③の<b>候補コム</b>で 3 段そろう位置が答え。<br>
+      ④の一致度 D(R) が許容幅の線を下回る谷が<br>
+      「生き残った候補」です。<br>
+      <b>限界</b>: c ≈ ±1 付近（明点・暗点の近く）は<br>
+      cos の頂点で感度が落ちます。R = 610 で確認を。
+    </div>
+  </div>
+
+  <div id="stage">
+    <div id="polarWrap">
+      <div class="rowcap">
+        ① 実際の測定 ― 試料を回したときの透過率（極座標・0° = 偏光子軸、左回りが正）。
+        <b>45° の値がそのまま c</b> を与えます。3 波長で形が違うことが次数決定の手がかり。
+      </div>
+      <div id="polarRow">
+        <div class="card"><canvas id="polar0"></canvas></div>
+        <div class="card"><canvas id="polar1"></canvas></div>
+        <div class="card"><canvas id="polar2"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <canvas id="curves"></canvas>
+      <span class="caption">② 各波長の c–R 曲線と測定値の水平線 ／ 交点 = その波長の候補 R（<i>水色</i> = 真の R）</span>
+    </div>
+    <div class="card">
+      <canvas id="combs"></canvas>
+      <span class="caption">③ 候補コム ― 3 段すべてがそろう R が答え（<b>シアン</b> = 生き残った候補）</span>
+    </div>
+    <div class="card">
+      <canvas id="match"></canvas>
+      <span class="caption">④ 一致度 D(R) = max|Δc| ／ 許容幅の線より下が「生き残る」領域。谷が深いほど誤差に強い</span>
+    </div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

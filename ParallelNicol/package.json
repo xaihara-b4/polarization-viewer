@@ -1,0 +1,9 @@
+{
+  "name": "parallel-nicol-order",
+  "version": "1.0.0",
+  "description": "平行ニコル測定の c = cos(2πR/λ) と次数の関係、および590/610/630nmの3波長で次数が決まる仕組みを可視化するWebアプリ",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT"
+}
