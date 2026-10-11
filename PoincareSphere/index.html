@@ -3,6 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!--
+  CSP（GitHub Pages ではレスポンスヘッダーを設定できないため meta で指定。3 アプリ共通の方針）
+  - script-src: 自オリジン（main.js）+ jsDelivr の three@0.160.0 配下のみ + 下の importmap の sha256
+  - style-src : 下の style 要素の sha256 のみ（動的な色は JS から CSSOM で設定するので 'unsafe-inline' 不要）
+  - frame-ancestors は meta では無効（GitHub Pages ではクリックジャッキング対策ヘッダーを付けられない）
+  ※ style 要素や importmap の中身を 1 文字でも変えたら sha256 を再計算すること
+-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net/npm/three@0.160.0/ 'sha256-CL3cQsIDykl7qdjq+7SLrN4DdnrAWr2k3uVDUDMjIdQ='; style-src 'sha256-MPclCYb5S8b9uAUzW9CZIPSZgdQQjAQQxomFyhurJsQ='; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>ポアンカレ球ビューア</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -219,11 +228,19 @@
     <div class="view" id="view-s2"><canvas></canvas><span class="caption">側面図（+S2 方向から）</span></div>
   </div>
 
+  <!-- three.js はバージョン固定（0.160.0）。"integrity" で CDN 改ざんを検知する
+       （importmap の integrity 非対応ブラウザでは無視され、従来どおり読み込まれる）。
+       importmap の中身を変更したら、CSP meta の sha256 ハッシュも再計算すること:
+       python3 -c "import hashlib,base64,re;s=open('index.html').read();b=re.search(r'<script type=\"importmap\">(.*?)</script>',s,re.S).group(1);print(base64.b64encode(hashlib.sha256(b.encode()).digest()).decode())" -->
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
       "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    },
+    "integrity": {
+      "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js": "sha384-61S/Nu32S3E5+n+KpCOTb2eRYps6fVKm+9Gz1QBvSePFthb46f063Aa/qe/lykFZ",
+      "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js": "sha384-qlO/ZugKPxAQUAvTlQoo0QECzxJIJySZmCF/DHdb2Xn/hHndFwX/vfUAC9Hbk6LP"
     }
   }
   </script>

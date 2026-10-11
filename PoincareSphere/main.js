@@ -148,6 +148,11 @@ function makePoint(pos, color) {
 
 // results: [{ delta, sOut, color }]（条件行ごとの計算結果）
 function rebuildDynamic(sIn, axis, results) {
+  // 作り直す前に GPU リソースを解放する（clear() だけでは入力のたびにリークする）
+  dynamicGroup.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) o.material.dispose();
+  });
   dynamicGroup.clear();
 
   // 回転軸（破線、球を貫通）
@@ -160,11 +165,14 @@ function rebuildDynamic(sIn, axis, results) {
 
   results.forEach((r, idx) => {
     // 回転軌跡（0 → −δ の円弧）。半径をわずかにずらし軌跡同士の重なりを回避
-    const n = Math.max(2, Math.ceil(Math.abs(r.delta) / (Math.PI / 90)));
+    // |δ| ≥ 2π では同じ円を周回するだけなので 1 周分に制限する
+    // （巨大な R / 極小の λ で点数が爆発しタブが固まるのを防ぐ）
+    const arc = Math.sign(r.delta) * Math.min(Math.abs(r.delta), 2 * Math.PI);
+    const n = Math.max(2, Math.ceil(Math.abs(arc) / (Math.PI / 90)));
     const radius = 1.002 + 0.004 * (idx % 6);
     const pts = [];
     for (let i = 0; i <= n; i++) {
-      pts.push(sIn.clone().applyAxisAngle(axis, -r.delta * (i / n)).multiplyScalar(radius));
+      pts.push(sIn.clone().applyAxisAngle(axis, -arc * (i / n)).multiplyScalar(radius));
     }
     dynamicGroup.add(new THREE.Line(
       new THREE.BufferGeometry().setFromPoints(pts),
@@ -316,18 +324,26 @@ addCondBtn.addEventListener('click', () => {
 });
 
 const fmt = x => (x >= 0 ? '+' : '') + x.toFixed(3);
-const dot = color => `<span class="dot" style="background:${color}"></span>`;
+// 色は style 属性ではなく data 属性で渡し、innerHTML 後に CSSOM で設定する
+// （CSP の style-src に 'unsafe-inline' を入れずに済ませるため）
+const dot = color => `<span class="dot" data-color="${color}"></span>`;
+function setResultHtml(html) {
+  resultEl.innerHTML = html;
+  resultEl.querySelectorAll('.dot[data-color]').forEach(el => {
+    el.style.background = el.dataset.color;
+  });
+}
 
 function update() {
   const [s1, s2, s3, thetaDeg] = inputs.map(el => parseFloat(el.value));
 
   if ([s1, s2, s3, thetaDeg].some(v => !isFinite(v))) {
-    resultEl.innerHTML = '<span class="err">S1〜S3・角度θに数値を入力してください</span>';
+    setResultHtml('<span class="err">S1〜S3・角度θに数値を入力してください</span>');
     return;
   }
   const sIn = normalizeStokes(s1, s2, s3);
   if (!sIn) {
-    resultEl.innerHTML = '<span class="err">S1, S2, S3 がすべて 0 です（偏光状態を指定できません）</span>';
+    setResultHtml('<span class="err">S1, S2, S3 がすべて 0 です（偏光状態を指定できません）</span>');
     return;
   }
 
@@ -345,6 +361,11 @@ function update() {
       return;
     }
     const delta = retardancePhase(cond.ret, cond.lambda);
+    // 2πR/λ がオーバーフローして ±Infinity になる入力（例: R=1e308, λ=1e-308）を弾く
+    if (!isFinite(delta)) {
+      lines.push(`${dot(color)}<span class="err">λ・R が不正です</span>`);
+      return;
+    }
     const sOut = applyWaveplate(sIn, axis, delta);
     results.push({ delta, sOut, color });
     lines.push(
@@ -356,7 +377,7 @@ function update() {
   }
 
   rebuildDynamic(sIn, axis, results);
-  resultEl.innerHTML = lines.join('\n');
+  setResultHtml(lines.join('\n'));
 }
 
 inputs.forEach(el => el.addEventListener('input', update));

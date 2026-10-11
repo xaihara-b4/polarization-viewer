@@ -2,6 +2,13 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<!--
+  CSP: GitHub Pages ではレスポンスヘッダを設定できないので meta で指定する。
+  スクリプトは同一オリジンの main.js のみ、外部通信なし。
+  下の <style> を 1 文字でも変更したら style-src の sha256 を再計算すること:
+    python3 -c "import re,hashlib,base64;s=open('index.html',encoding='utf-8').read();print(base64.b64encode(hashlib.sha256(re.search(r'^<style>(.*?)</style>',s,re.S|re.M).group(1).encode()).digest()).decode())"
+-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'sha256-Yq9INO6FAvm7B3Tl9cTOPdDZJLk4d/dfvN2z2uZZxKM='; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>平行ニコル 3波長で次数を決める</title>
 <style>
@@ -82,6 +89,11 @@
   .check input { accent-color: #8ecbff; cursor: pointer; }
   /* 波長チェックは各波長の色で見出しを出す */
   .check .sw { display: inline-block; width: 22px; height: 3px; border-radius: 2px; }
+  /* CSP（style-src にハッシュ指定）で style 属性が使えないため、色はクラスで与える */
+  .check .sw0 { background: #ffd166; }
+  .check .sw1 { background: #ff8a5c; }
+  .check .sw2 { background: #ff5c7a; }
+  input[type="range"].full { width: 100%; }
 
   .btns { display: flex; gap: 6px; margin: 8px 0 4px; }
   .btns button {
@@ -228,7 +240,7 @@
         <label for="R">真のリタデーション R</label>
         <input id="Rnum" type="number" min="0" max="3000" step="1" value="1400">
       </div>
-      <input id="R" type="range" min="0" max="3000" step="0.5" value="1400" style="width:100%">
+      <input id="R" class="full" type="range" min="0" max="3000" step="0.5" value="1400">
       <div class="note">R [nm]（測定者には見えない値）</div>
       <div class="note left">
         アプリはこの R から各波長の c を作ります。以下の表示は
@@ -239,11 +251,11 @@
     <fieldset>
       <legend>測定に使う波長</legend>
       <label class="check"><input type="checkbox" id="use0" checked>
-        <span class="sw" style="background:#ffd166"></span> 590 nm</label>
+        <span class="sw sw0"></span> 590 nm</label>
       <label class="check"><input type="checkbox" id="use1" checked>
-        <span class="sw" style="background:#ff8a5c"></span> 610 nm</label>
+        <span class="sw sw1"></span> 610 nm</label>
       <label class="check"><input type="checkbox" id="use2" checked>
-        <span class="sw" style="background:#ff5c7a"></span> 630 nm</label>
+        <span class="sw sw2"></span> 630 nm</label>
       <div class="note left">
         1 本 → 2 本 → 3 本と増やすと候補が絞られます。<br>
         <b>波長分散は無いものとする</b>（R は波長によらず一定）。

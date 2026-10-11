@@ -363,7 +363,9 @@ function rebuildStatic() {
 
 // ---------- 状態テキスト ----------
 const statusEl = document.getElementById('status');
-const dotHtml = c => `<span class="dot" style="background:${c}"></span>`;
+// 色は style 属性ではなく data 属性で渡し、innerHTML 後に CSSOM で設定する
+// （CSP の style-src に 'unsafe-inline' を入れずに済ませるため）
+const dotHtml = c => `<span class="dot" data-color="${c}"></span>`;
 
 function classifyOutput() {
   const dDeg = THREE.MathUtils.radToDeg(stateP.delta);
@@ -410,6 +412,9 @@ function updateStatus() {
     `光路差 Γ = ${Math.round(stateP.retard)} nm = ${ratio.toFixed(2)}λ ${plateName}\n` +
     `位相差 δ = ${dDeg}°${dDeg !== dNorm ? `（≡ ${dNorm}°）` : ''}\n` +
     `出力: <b>${classifyOutput()}</b>`;
+  statusEl.querySelectorAll('.dot[data-color]').forEach(el => {
+    el.style.background = el.dataset.color;
+  });
 }
 
 // ---------- 波の更新（毎フレーム）----------
